@@ -846,8 +846,8 @@ class WeatherBot(commands.Bot):
     async def tc_date_refresh(self):
         now = datetime.now(JST)
         today = now.strftime("%Y-%m-%d")
-        # 0:00〜0:01 のタイミングで、前日まで未更新なら更新
-        if now.hour == 0 and now.minute == 0 and self.tc_updated_date != today:
+        # 日付が変わっていたら更新（毎分チェック、重複更新防止）
+        if self.tc_updated_date != today:
             self.tc_updated_date = today
             for tc_msg in self.tc_messages:
                 try:
@@ -894,7 +894,7 @@ class WeatherBot(commands.Bot):
             state = load_json(STATE_FILE)
             if state.get("evening_posted") == now.strftime("%Y-%m-%d"):
                 return
-            await self._post_weather("today_tomorrow", "夜")
+            await self._post_weather("week", "週間")
             state["evening_posted"] = now.strftime("%Y-%m-%d")
             save_json(STATE_FILE, state)
 
