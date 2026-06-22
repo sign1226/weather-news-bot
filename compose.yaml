@@ -1,0 +1,12 @@
+services:
+  weather-news-bot:
+    build:
+      context: app
+      dockerfile: Dockerfile
+    container_name: weather-news-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./data:/app/data
