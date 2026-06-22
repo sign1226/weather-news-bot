@@ -855,7 +855,7 @@ class WeatherBot(commands.Bot):
                     if channel:
                         msg = await channel.fetch_message(tc_msg["message_id"])
                         embed = build_timecard_embed(today)
-                        view = TimecardView(build_timecard_embed)
+                        view = TimecardView(build_timecard_embed, target_date=today)
                         await msg.edit(embed=embed, view=view)
                         logger.info("タイムカードを翌日に更新: %s", tc_msg["message_id"])
                 except Exception as e:
