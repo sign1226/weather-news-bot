@@ -825,6 +825,7 @@ class WeatherBot(commands.Bot):
         self.add_command(add_place_cmd)
         self.add_command(remove_place_cmd)
         self.add_command(tc_cmd)
+        self.add_command(quake_cmd)
         # タイムカードを永続Viewとして登録（Bot再起動後もボタン操作可能）
         self.add_view(TimecardView())
 
@@ -914,10 +915,14 @@ class WeatherBot(commands.Bot):
     # ── 地震監視 ──
     @tasks.loop(seconds=QUAKE_INTERVAL)
     async def quake_monitor(self):
+        # オンオフ確認
+        state = load_json(STATE_FILE)
+        if not state.get("quake_enabled", True):
+            return
+
         quakes = get_jma_quakes()
         if not quakes:
             return
-        state = load_json(STATE_FILE)
         posted = state.get("quake_posted", [])
         if not posted:
             for q in quakes:
@@ -942,6 +947,20 @@ class WeatherBot(commands.Bot):
         state["quake_posted"] = posted
         save_json(STATE_FILE, state)
 
+        # 古い地震通知を削除してから投稿
+        channel = self.get_channel(CHANNEL_ID)
+        if channel:
+            try:
+                async for hist_msg in channel.history(limit=50):
+                    if hist_msg.author == self.user and hist_msg.embeds:
+                        for e in hist_msg.embeds:
+                            if e.title and "🌋 地震情報" in e.title:
+                                await hist_msg.delete()
+                                logger.info("古い地震通知を削除: %s", hist_msg.id)
+                                break
+            except Exception as e:
+                logger.warning("古い地震通知削除失敗: %s", e)
+
         for key, q in new_quakes[:3]:
             embed = discord.Embed(
                 title="🌋 地震情報",
@@ -954,7 +973,6 @@ class WeatherBot(commands.Bot):
                 ),
                 color=0xFF4500,
             )
-            channel = self.get_channel(CHANNEL_ID)
             if channel:
                 await channel.send(embed=embed)
                 logger.info("地震情報投稿: %s M%s", q['name'], q['mag'])
@@ -1098,6 +1116,23 @@ async def tc_cmd(ctx):
     state = load_json(STATE_FILE)
     state["tc_messages"] = ctx.bot.tc_messages
     save_json(STATE_FILE, state)
+    try:
+        await ctx.message.delete()
+    except Exception:
+        pass
+
+
+@commands.command(name="quake", help="地震速報のオンオフ（!quake on / !quake off）")
+async def quake_cmd(ctx, mode: str = ""):
+    mode = mode.lower().strip()
+    if mode not in ("on", "off"):
+        await ctx.send("使い方: `!quake on` または `!quake off`", delete_after=10)
+        return
+    state = load_json(STATE_FILE)
+    state["quake_enabled"] = (mode == "on")
+    save_json(STATE_FILE, state)
+    status = "有効 ✅" if state["quake_enabled"] else "無効 ❌"
+    await ctx.send(f"地震速報を{status}にしました。", delete_after=10)
     try:
         await ctx.message.delete()
     except Exception:
