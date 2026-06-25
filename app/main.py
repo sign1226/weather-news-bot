@@ -855,6 +855,7 @@ class WeatherBot(commands.Bot):
         # 日付が変わっていたら更新（毎分チェック、重複更新防止）
         if self.tc_updated_date != today:
             self.tc_updated_date = today
+            stale = []
             for tc_msg in self.tc_messages:
                 try:
                     channel = self.get_channel(tc_msg["channel_id"])
@@ -868,8 +869,17 @@ class WeatherBot(commands.Bot):
                         state = load_json(STATE_FILE)
                         state["tc_messages"] = self.tc_messages
                         save_json(STATE_FILE, state)
+                except discord.NotFound:
+                    logger.info("タイムカードメッセージ削除済み、リストから除去: %s", tc_msg["message_id"])
+                    stale.append(tc_msg)
                 except Exception as e:
                     logger.warning("タイムカード更新失敗: %s", e)
+            if stale:
+                for s in stale:
+                    self.tc_messages.remove(s)
+                state = load_json(STATE_FILE)
+                state["tc_messages"] = self.tc_messages
+                save_json(STATE_FILE, state)
 
     @tc_date_refresh.before_loop
     async def before_tc_refresh(self):
